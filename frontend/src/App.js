@@ -5,7 +5,7 @@ export default function App() {
   const [task, setTask] = useState('');
 
   useEffect(() => {
-    fetch('/api/todos')
+    fetch('http://localhost:5000/todos')
       .then((res) => res.json())
       .then((data) => setTodos(data));
   }, []);
