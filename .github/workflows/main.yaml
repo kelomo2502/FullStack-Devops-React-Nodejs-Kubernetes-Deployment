@@ -15,7 +15,7 @@ jobs:
     
     # Step 1: Checkout the code
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     # Step 2: Set up Docker Buildx
     - name: Set up Docker Buildx
@@ -40,18 +40,32 @@ jobs:
         docker build -t kelomo2502/frontend:latest -f frontend/Dockerfile .
         docker push kelomo2502/frontend:latest
 
-    # Step 6: Set up Minikube and kubectl (use kubectl with Minikube locally)
-    - name: Set up Minikube
-      uses: mindy-rj/minikube-action@v2
-      with:
-        minikube-version: 'v1.34.0'
-    
-    - name: Set up kubectl
+    # Step 6: Install Minikube and kubectl
+    - name: Install Minikube and kubectl
       run: |
-        echo "${{ secrets.KUBECONFIG }}" > $HOME/.kube/config
+        # Install Minikube
+        curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+        sudo install minikube-linux-amd64 /usr/local/bin/minikube
+        
+        # Install kubectl
+        curl -LO "https://dl.k8s.io/release/v1.24.0/bin/linux/amd64/kubectl"
+        sudo install kubectl /usr/local/bin/kubectl
+
+    # Step 7: Set up kubectl using the official action
+    - name: Set up kubectl
+      uses: actions/kubectl-alpine@v2
+      env:
+       KUBECONFIG: ${{ secrets.KUBECONFIG }}
+       # specify the kubectl version here if necessary
+
+    # Step 8: Start Minikube and set kubeconfig
+    - name: Start Minikube and set kubeconfig
+      run: |
+        minikube start
+        echo "${{ secrets.KUBECONFIG }}"
         kubectl config use-context minikube
 
-    # Step 7: Apply the Kubernetes configurations
+    # Step 9: Apply the Kubernetes configurations
     - name: Deploy to Minikube Kubernetes
       run: |
         kubectl apply -f kubernetes/mongo-statefulset.yaml
@@ -64,4 +78,3 @@ jobs:
       run: |
         kubectl rollout status deployment/frontend
         kubectl rollout status deployment/backend
-
