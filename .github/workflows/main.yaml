@@ -15,7 +15,7 @@ jobs:
     
     # Step 1: Checkout the code
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v2
 
     # Step 2: Set up Docker Buildx
     - name: Set up Docker Buildx
@@ -53,16 +53,13 @@ jobs:
 
     # Step 7: Set up kubectl using the official action
     - name: Set up kubectl
-      uses: actions/kubectl-alpine@v2
-      env:
-       KUBECONFIG: ${{ secrets.KUBECONFIG }}
-       # specify the kubectl version here if necessary
+      uses: actions/setup-kubectl@v2
 
     # Step 8: Start Minikube and set kubeconfig
     - name: Start Minikube and set kubeconfig
       run: |
         minikube start
-        echo "${{ secrets.KUBECONFIG }}"
+        echo "${{ secrets.KUBECONFIG }}" > $HOME/.kube/config
         kubectl config use-context minikube
 
     # Step 9: Apply the Kubernetes configurations
