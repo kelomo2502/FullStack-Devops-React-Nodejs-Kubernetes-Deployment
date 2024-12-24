@@ -10,7 +10,10 @@ on:
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted  # This tells GitHub Actions to use your self-hosted runner
+      - Windows      # Label for Windows runner
+      - X64          # Label for X64 architecture
     steps:
     
     # Step 1: Checkout the code
