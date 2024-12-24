@@ -7,9 +7,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-mongoose.connect(process.env.MONGODB_URI,{
-  useNewUrlParser: true, useUnifiedTopology: true
-});
+mongoose.connect('mongodb://mongo-service.default.svc.cluster.local:27017/todo');
 
 const todoSchema = new mongoose.Schema({
   task: String,

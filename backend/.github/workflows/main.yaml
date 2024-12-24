@@ -1,0 +1,63 @@
+name: Fullstack CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    
+    # Step 1: Checkout the code
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    # Step 2: Set up Docker Buildx
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    # Step 3: Log in to Docker Hub (ensure you have stored your Docker Hub credentials in GitHub secrets)
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    # Step 4: Build and push the backend Docker image
+    - name: Build and push Backend Docker image
+      run: |
+        docker build -t kelomo2502/backend:latest -f backend/Dockerfile .
+        docker push kelomo2502/backend:latest
+
+    # Step 5: Build and push the frontend Docker image
+    - name: Build and push Frontend Docker image
+      run: |
+        docker build -t kelomo2502/frontend:latest -f frontend/Dockerfile .
+        docker push kelomo2502/frontend:latest
+
+    # Step 6: Set up Minikube and kubectl (use kubectl with Minikube locally)
+    - name: Set up Minikube
+      uses: mindy-rj/minikube-action@v2
+      with:
+        minikube-version: 'v1.34.0 '
+    
+    - name: Set up kubectl
+      run: |
+        echo "${{ secrets.KUBECONFIG }}" > $HOME/.kube/config
+        kubectl config use-context minikube
+
+    # Step 7: Apply the Kubernetes configurations
+    - name: Deploy to Minikube Kubernetes
+      run: |
+        kubectl apply -f kubernetes/mongo-statefulset.yaml
+        kubectl apply -f kubernetes/mongo-service.yaml
+        kubectl apply -f kubernetes/backend.yaml
+        kubectl apply -f kubernetes/frontend.yaml
+
+    # Optional: Rollout status check to ensure the deployment is successful
+    - name: Check Rollout Status
+      run: |
+        kubectl rollout status deployment/frontend
+        kubectl rollout status deployment/backend
