@@ -46,15 +46,15 @@ jobs:
     # Step 6: Install Minikube
     - name: Install Minikube
       run: |
-        curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-        sudo install minikube-linux-amd64 /usr/local/bin/minikube
+       curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-windows-amd64.exe
+       move minikube-windows-amd64.exe C:\Windows\System32\minikube.exe
 
     # Step 7: Install kubectl
     - name: Install kubectl
       run: |
-        curl -LO "https://dl.k8s.io/release/v1.24.0/bin/linux/amd64/kubectl"
-        chmod +x kubectl
-        sudo mv kubectl /usr/local/bin/
+       curl -LO "https://dl.k8s.io/release/v1.24.0/bin/windows/amd64/kubectl.exe"
+       move kubectl.exe C:\Windows\System32\
+
 
     # Step 8: Start Minikube and configure kubectl
     - name: Start Minikube
