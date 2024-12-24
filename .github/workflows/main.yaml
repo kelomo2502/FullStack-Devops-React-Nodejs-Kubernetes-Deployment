@@ -47,18 +47,14 @@ jobs:
     - name: Install Minikube
       shell: powershell
       run: |
-       Invoke-WebRequest -Uri https://storage.googleapis.com/minikube/releases/latest/minikube-windows-amd64.exe -OutFile minikube.exe
-       Move-Item -Path minikube.exe -Destination C:\Windows\System32\minikube.exe
-
-
-
+       winget install --id Kubernetes.minikube -e --source winget
 
     # Step 7: Install kubectl
     - name: Install kubectl
       shell: powershell
       run: |
-       Invoke-WebRequest -Uri https://dl.k8s.io/release/v1.24.0/bin/windows/amd64/kubectl.exe -OutFile kubectl.exe
-       Move-Item -Path kubectl.exe -Destination C:\Windows\System32\kubectl.exe
+       winget install --id Kubernetes.kubectl -e --source winget
+
 
 
     # Step 8: Start Minikube and configure kubectl
