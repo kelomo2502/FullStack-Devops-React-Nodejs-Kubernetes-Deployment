@@ -2,23 +2,11 @@
 
 FROM node:16-alpine
 
+# For frontend Dockerfile
 WORKDIR /app
-
-# Copy package.json and package-lock.json
-COPY package*.json ./
-
-# Install dependencies
+COPY frontend/package*.json ./
 RUN npm install
-
-# Copy public folder and src folder
-COPY public ./public
-COPY src ./src
-
-# Build the application
-RUN npm run build
-
-# Expose port 3000
+COPY frontend/public ./public
+COPY frontend/. .
 EXPOSE 3000
-
-# Start the app
 CMD ["npm", "start"]
