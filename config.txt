@@ -1,1 +1,3 @@
 minikube kubectl -- config view
+
+this si to view the config

@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build-and-deploy:
@@ -41,7 +44,7 @@ jobs:
     - name: Set up Minikube
       uses: mindy-rj/minikube-action@v2
       with:
-        minikube-version: 'v1.34.0 '
+        minikube-version: 'v1.34.0'
     
     - name: Set up kubectl
       run: |
