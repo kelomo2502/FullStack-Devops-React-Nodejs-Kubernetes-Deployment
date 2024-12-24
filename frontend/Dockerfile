@@ -12,13 +12,19 @@ RUN npm install
 
 # Copy public folder and src folder
 COPY public ./public
-COPY src ./src
+# COPY src ./src
 
-# Build the application
-RUN npm run build
+# # Build the application
+# RUN npm run build
 
-# Expose port 3000
+# # Expose port 3000
+# EXPOSE 3000
+
+# # Start the app
+# CMD ["npm", "start"]
+WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend/. .
 EXPOSE 3000
-
-# Start the app
 CMD ["npm", "start"]
