@@ -44,25 +44,42 @@ jobs:
         docker push kelomo2502/frontend:latest
 
     # Step 6: Install Minikube
-    - name: Install Minikube
+    # Step 6: Clean Install Minikube
+    - name: Clean Install Minikube
       shell: powershell
       run: |
-        if (winget list Kubernetes.minikube -q) {
-            Write-Host "Minikube is already installed. Skipping installation."
-        } else {
-            winget install --id Kubernetes.minikube -e --source winget
-      
+       if (winget list Kubernetes.minikube -q) {
+          Write-Host "Minikube is already installed. Removing the existing version..."
+          winget uninstall --id Kubernetes.minikube -e --source winget
+            if ($LASTEXITCODE -ne 0) {
+                Write-Error "Failed to uninstall existing Minikube."
+                exit 1
+            }
+        }
+        Write-Host "Installing Minikube..."
+        winget install --id Kubernetes.minikube -e --source winget
+       if ($LASTEXITCODE -ne 0) {
+          Write-Error "Failed to install Minikube."
+          exit 1
         }
 
-    # Step 7: Install kubectl
-    - name: Install kubectl
+# Step 7: Clean Install kubectl
+    - name: Clean Install kubectl
       shell: powershell
       run: |
-        if (winget list Kubernetes.kubectl -q) {
-            Write-Host "kubectl is already installed. Skipping installation."
-        } else {
-              winget install --id Kubernetes.kubectl -e --source winget
-              
+       if (winget list Kubernetes.kubectl -q) {
+          Write-Host "kubectl is already installed. Removing the existing version..."
+          winget uninstall --id Kubernetes.kubectl -e --source winget
+          if ($LASTEXITCODE -ne 0) {
+          Write-Error "Failed to uninstall existing kubectl."
+          exit 1
+        }
+        }
+        Write-Host "Installing kubectl..."
+        winget install --id Kubernetes.kubectl -e --source winget
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to install kubectl."
+            exit 1
         }
 
     # Step 8: Start Minikube and configure kubectl
