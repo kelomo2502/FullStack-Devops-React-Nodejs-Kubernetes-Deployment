@@ -1,104 +1,97 @@
-name: Dockerize and Deploy to Kubernetes
+name: Fullstack CI/CD Pipeline
 
 on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  dockerize:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Checkout the code
-      - name: Checkout code
-        uses: actions/checkout@v3
+    
+    # Step 1: Checkout the code
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    # Step 2: Set up Docker Buildx
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    # Step 3: Log in to Docker Hub (ensure you have stored your Docker Hub credentials in GitHub secrets)
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    # Step 4: Build and push the backend Docker image
+    - name: Build and push Backend Docker image
+      run: |
+        docker build -t kelomo2502/backend:latest -f backend/Dockerfile .
+        docker push kelomo2502/backend:latest
+
+    # Step 5: Build and push the frontend Docker image
+    - name: Build and push Frontend Docker image
+      run: |
+        docker build -t kelomo2502/frontend:latest -f frontend/Dockerfile .
+        docker push kelomo2502/frontend:latest
+
+    # Step 6: Configure SSH for EC2
+    - name: Configure SSH for EC2
+      run: |
+        echo "${{ secrets.SSH_KEY }}" > ec2_key.pem
+        chmod 600 ec2_key.pem
+
+    # Step 7: Deploy to EC2 and set up Minikube
+    - name: SSH into EC2 and Set Up Minikube
+      run: |
+        ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
         
-      # Step 2: Log in to Docker Hub
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: '${{ secrets.DOCKER_USERNAME }}'
-          password: '${{ secrets.DOCKER_PASSWORD }}'
+        # Install Docker
+        sudo apt-get update
+        sudo apt-get install -y docker.io
+        
+        # Install Minikube
+        curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+        sudo mv minikube-linux-amd64 /usr/local/bin/minikube
+        sudo chmod +x /usr/local/bin/minikube
+        minikube version
 
-      # Step 3: Install dependencies and build the Backend
-      - name: Install Backend dependencies
-        run: |
-          cd backend
-          npm install
-          npm run build
+        # Install kubectl
+        curl -LO "https://dl.k8s.io/release/v1.24.0/bin/linux/amd64/kubectl"
+        sudo mv kubectl /usr/local/bin/kubectl
+        sudo chmod +x /usr/local/bin/kubectl
+        kubectl version --client
 
-      # Step 4: Build and push the Backend Docker image
-      - name: Build and push Backend Docker image
-        run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/backend:latest ./backend
-          docker push ${{ secrets.DOCKER_USERNAME }}/backend:latest
+        # Start Minikube
+        sudo minikube start --driver=none
+        mkdir -p $HOME/.kube
+        sudo cp -r /root/.minikube /home/ubuntu/.minikube
+        sudo chown -R ubuntu:ubuntu /home/ubuntu/.minikube
+        sudo cp /root/.kube/config /home/ubuntu/.kube/config
+        sudo chown -R ubuntu:ubuntu /home/ubuntu/.kube/config
+        
+        EOF
 
-      # Step 5: Install dependencies and build the Frontend
-      - name: Install Frontend dependencies
-        run: |
-          cd frontend
-          npm install
-          npm run build
+    # Step 8: Deploy to Kubernetes
+    - name: Deploy to Kubernetes
+      run: |
+        ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+        
+        kubectl apply -f /path/to/your/kubernetes/mongo-statefulset.yaml
+        kubectl apply -f /path/to/your/kubernetes/mongo-service.yaml
+        kubectl apply -f /path/to/your/kubernetes/backend.yaml
+        kubectl apply -f /path/to/your/kubernetes/frontend.yaml
 
-      # Step 6: Build and push the Frontend Docker image
-      - name: Build and push Frontend Docker image
-        run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/frontend:latest ./frontend
-          docker push ${{ secrets.DOCKER_USERNAME }}/frontend:latest
+        kubectl rollout status deployment/backend
+        kubectl rollout status deployment/frontend
 
-      # Step 7: Log out from Docker Hub
-      - name: Log out from Docker Hub
-        run: docker logout
+        EOF
 
-  deploy:
-    needs: dockerize
-    runs-on: ubuntu-latest
-    steps:
-      # Step 1: Checkout the code
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      # Step 2: Install Minikube
-      - name: Install Minikube
-        shell: bash
-        run: |
-          curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-          sudo mv minikube-linux-amd64 /usr/local/bin/minikube
-          sudo chmod +x /usr/local/bin/minikube
-          minikube version
-
-      # Step 3: Install kubectl
-      - name: Install kubectl
-        shell: bash
-        run: |
-          curl -LO "https://dl.k8s.io/release/v1.27.0/bin/linux/amd64/kubectl"
-          sudo mv kubectl /usr/local/bin/kubectl
-          sudo chmod +x /usr/local/bin/kubectl
-          kubectl version --client
-
-      # Step 4: Start Minikube
-      - name: Start Minikube
-        run: |
-          minikube start
-          mkdir -p $HOME/.kube
-          cp $HOME/.minikube/profiles/minikube/config.json $HOME/.kube/config
-          kubectl config use-context minikube
-
-      # Step 5: Deploy Backend and Frontend to Kubernetes
-      - name: Deploy to Minikube Kubernetes
-        run: |
-          # Apply Kubernetes configurations
-          kubectl apply -f kubernetes/mongo-statefulset.yaml
-          kubectl apply -f kubernetes/mongo-service.yaml
-          kubectl apply -f kubernetes/backend.yaml
-          kubectl apply -f kubernetes/frontend.yaml
-
-      # Step 6: Check Rollout Status
-      - name: Check Rollout Status
-        run: |
-          kubectl rollout status deployment/frontend
-          kubectl rollout status deployment/backend
-
-      # Step 7: Clean up SSH Key (if used for deployment)
-      - name: Cleanup local SSH key
-        run: rm ec2_key.pem
+    # Step 9: Cleanup SSH Key
+    - name: Cleanup SSH Key
+      run: rm ec2_key.pem
