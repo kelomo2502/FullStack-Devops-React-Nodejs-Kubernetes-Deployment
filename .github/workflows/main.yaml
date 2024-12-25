@@ -47,24 +47,29 @@ jobs:
     - name: Install Minikube
       shell: powershell
       run: |
-       
        if (!(winget list Kubernetes.minikube -q)) {
-        winget install --id Kubernetes.minikube -e --source winget
+          winget install --id Kubernetes.minikube -e --source winget
+       if ($LASTEXITCODE -ne 0) {
+          Write-Error "Failed to install Minikube."
+          exit 1
+       }
        } else {
-        echo "Minikube is already installed. Skipping installation."
+       Write-Host "Minikube is already installed. Skipping installation."
        }
 
     # Step 7: Install kubectl
     - name: Install kubectl
-      shell: powershell
+      shell: pwsh
       run: |
        if (!(winget list Kubernetes.kubectl -q)) {
-        winget install --id Kubernetes.kubectl -e --source winget
-       } else {
-        echo "kubectl is already installed. Skipping installation."
+       winget install --id Kubernetes.kubectl -e --source winget
+       if ($LASTEXITCODE -ne 0) {
+          Write-Error "Failed to install kubectl."
+          exit 1
        }
-
-
+       } else {
+       Write-Host "kubectl is already installed. Skipping installation."
+       }
 
     # Step 8: Start Minikube and configure kubectl
     - name: Start Minikube
