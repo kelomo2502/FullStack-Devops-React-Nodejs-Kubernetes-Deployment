@@ -1,152 +1,39 @@
-# name: Fullstack CI/CD Pipeline
+name: Dockerize, Build, Push, and Deploy to Kubernetes
 
-# on:
-#   push:
-#     branches:
-#       - main
-#   pull_request:
-#     branches:
-#       - main
-
-# jobs:
-#   build-and-deploy:
-#     runs-on:
-#       - self-hosted  # This tells GitHub Actions to use your self-hosted runner
-#       - Windows      # Label for Windows runner
-#       - X64          # Label for X64 architecture
-#     steps:
-    
-#     # Step 1: Checkout the code
-#     - name: Checkout code
-#       uses: actions/checkout@v2
-
-#     # Step 2: Set up Docker Buildx
-#     - name: Set up Docker Buildx
-#       uses: docker/setup-buildx-action@v2
-
-#     # Step 3: Log in to Docker Hub
-#     - name: Log in to Docker Hub
-#       uses: docker/login-action@v2
-#       with:
-#         username: ${{ secrets.DOCKER_USERNAME }}
-#         password: ${{ secrets.DOCKER_PASSWORD }}
-
-#     # Step 4: Build and push the backend Docker image
-#     - name: Build and push Backend Docker image
-#       run: |
-#         docker build -t kelomo2502/backend:latest -f backend/Dockerfile .
-#         docker push kelomo2502/backend:latest
-
-#     # Step 5: Build and push the frontend Docker image
-#     - name: Build and push Frontend Docker image
-#       run: |
-#         docker build -t kelomo2502/frontend:latest -f frontend/Dockerfile .
-#         docker push kelomo2502/frontend:latest
-
-#     # Step 6: Install Minikube
-#     - name: Force Clean Install Minikube
-#       shell: powershell
-#       run: |
-#         if (winget list Kubernetes.minikube -q) {
-#             Write-Host "Minikube is already installed. Removing the existing version..."
-#             winget uninstall --id Kubernetes.minikube -e --source winget
-#             if ($LASTEXITCODE -ne 0) {
-#             Write-Warning "Failed to uninstall existing Minikube. Continuing with the installation..."
-#             }
-#         }
-#         Write-Host "Installing Minikube..."
-#         winget install --id Kubernetes.minikube -e --source winget
-#         if ($LASTEXITCODE -ne 0) {
-#         Write-Error "Failed to install Minikube."
-#         exit 1
-#         }
-
-#     # Step 7: Install kubectl
-#     - name: Force Clean Install kubectl
-#       shell: powershell
-#       run: |
-#         if (winget list Kubernetes.kubectl -q) {
-#             Write-Host "kubectl is already installed. Removing the existing version..."
-#             winget uninstall --id Kubernetes.kubectl -e --source winget
-#             if ($LASTEXITCODE -ne 0) {
-#                 Write-Warning "Failed to uninstall existing kubectl. Continuing with the installation..."
-#             }
-#         }
-#         Write-Host "Installing kubectl..."
-#         winget install --id Kubernetes.kubectl -e --source winget
-#         if ($LASTEXITCODE -ne 0) {
-#         Write-Error "Failed to install kubectl."
-#         exit 1
-#         }
-
-#     # Step 8: Start Minikube and configure kubectl
-#     - name: Start Minikube
-#       run: |
-#         minikube start
-#         mkdir -p $HOME/.kube
-#         cp $HOME/.minikube/profiles/minikube/config.json $HOME/.kube/config
-#         kubectl config use-context minikube
-
-#     # Step 9: Apply the Kubernetes configurations
-#     - name: Deploy to Minikube Kubernetes
-#       run: |
-#         kubectl apply -f kubernetes/mongo-statefulset.yaml
-#         kubectl apply -f kubernetes/mongo-service.yaml
-#         kubectl apply -f kubernetes/backend.yaml
-#         kubectl apply -f kubernetes/frontend.yaml
-
-#     # Step 10: Check Rollout Status
-#     - name: Check Rollout Status
-#       run: |
-#         kubectl rollout status deployment/frontend
-#         kubectl rollout status deployment/backend
-
-name: Dockerize and deploy
-
-'on':
+on:
   push:
-    branches:
-      - main
-  pull_request:
     branches:
       - main
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-      - name: Install dependencies
-        run: npm install
-      - name: Build the application
-        run: npm run build
-
   dockerize:
-    needs:
-      - build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
           username: '${{ secrets.DOCKER_USERNAME }}'
           password: '${{ secrets.DOCKER_PASSWORD }}'
-      - name: Build and push Docker image
+
+      # Build and push the Backend Docker image
+      - name: Build and push Backend Docker image
         run: |
-          docker build -t node-server .
-          docker tag node-server:latest ${{ secrets.DOCKER_USERNAME }}/node-server:latest
-          docker push ${{ secrets.DOCKER_USERNAME }}/node-server:latest
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/backend:latest ./backend
+          docker push ${{ secrets.DOCKER_USERNAME }}/backend:latest
+
+      # Build and push the Frontend Docker image
+      - name: Build and push Frontend Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/frontend:latest ./frontend
+          docker push ${{ secrets.DOCKER_USERNAME }}/frontend:latest
+
       - name: Log out from Docker Hub
         run: docker logout
 
-  deploy:
+  deploy-to-kubernetes:
     needs:
       - dockerize
     runs-on: ubuntu-latest
@@ -154,49 +41,47 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 1: Configure SSH for EC2
-      - name: Configure SSH for EC2
+      # Step 1: Install Minikube
+      - name: Install Minikube
         run: |
-          echo "${{ secrets.SSH_KEY }}" > ec2_key.pem
-          chmod 600 ec2_key.pem
+          curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+          sudo install minikube-linux-amd64 /usr/local/bin/minikube
 
-      # Step 2: SSH into EC2 instance and install Minikube and kubectl
-      - name: Setup Minikube and kubectl on EC2
+      # Step 2: Install kubectl
+      - name: Install kubectl
         run: |
+          curl -LO https://dl.k8s.io/release/v1.24.0/bin/linux/amd64/kubectl
+          sudo install kubectl /usr/local/bin/kubectl
+
+      # Step 3: Start Minikube
+      - name: Start Minikube
+        run: |
+          minikube start --driver=docker
+
+      # Step 4: Configure kubectl to use Minikube's context
+      - name: Set up kubectl configuration for Minikube
+        run: |
+          mkdir -p $HOME/.kube
+          cp /etc/kubernetes/admin.conf $HOME/.kube/config
+          kubectl config use-context minikube
+
+      # Step 5: Deploy to Kubernetes (Minikube)
+      - name: Deploy to Kubernetes
+        run: |
+          # Log into Docker Hub from EC2
           ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
-            # Update and install Minikube and kubectl
-            sudo apt update && sudo apt install -y apt-transport-https curl
-            curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-            sudo mv minikube-linux-amd64 /usr/local/bin/minikube
-            sudo chmod +x /usr/local/bin/minikube
-            curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.24.0/bin/linux/amd64/kubectl
-            sudo mv kubectl /usr/local/bin/kubectl
-            sudo chmod +x /usr/local/bin/kubectl
-            # Start Minikube
-            minikube start --driver=docker
-            minikube status
+
+          # Backend Docker deployment to Kubernetes cluster
+          kubectl set image deployment/backend backend=${{ secrets.DOCKER_USERNAME }}/backend:latest --record
+          kubectl rollout status deployment/backend
+
+          # Frontend Docker deployment to Kubernetes cluster
+          kubectl set image deployment/frontend frontend=${{ secrets.DOCKER_USERNAME }}/frontend:latest --record
+          kubectl rollout status deployment/frontend
+
+          # Clean up unused Docker images
+          docker system prune -af || true
           EOF
 
-      # Step 3: Set up kubectl and deploy to Minikube
-      - name: Deploy to Minikube on EC2
-        run: |
-          ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
-            # Set up kubectl config for Minikube
-            mkdir -p $HOME/.kube
-            cp /home/${{ secrets.EC2_USER }}/.minikube/profiles/minikube/config.json $HOME/.kube/config
-            kubectl config use-context minikube
-
-            # Deploy Kubernetes resources to Minikube
-            kubectl apply -f kubernetes/mongo-statefulset.yaml
-            kubectl apply -f kubernetes/mongo-service.yaml
-            kubectl apply -f kubernetes/backend.yaml
-            kubectl apply -f kubernetes/frontend.yaml
-
-            # Check rollout status
-            kubectl rollout status deployment/frontend
-            kubectl rollout status deployment/backend
-          EOF
-
-      # Step 4: Cleanup local SSH key
       - name: Cleanup local SSH key
         run: rm ec2_key.pem
