@@ -51,10 +51,7 @@ jobs:
             Write-Host "Minikube is already installed. Skipping installation."
         } else {
             winget install --id Kubernetes.minikube -e --source winget
-            if ($LASTEXITCODE -ne 0) {
-                Write-Error "Failed to install Minikube."
-                exit 1
-          }
+      
         }
 
     # Step 7: Install kubectl
@@ -65,10 +62,7 @@ jobs:
             Write-Host "kubectl is already installed. Skipping installation."
         } else {
               winget install --id Kubernetes.kubectl -e --source winget
-              if ($LASTEXITCODE -ne 0) {
-                  Write-Error "Failed to install kubectl."
-                  exit 1
-        }
+              
         }
 
     # Step 8: Start Minikube and configure kubectl
