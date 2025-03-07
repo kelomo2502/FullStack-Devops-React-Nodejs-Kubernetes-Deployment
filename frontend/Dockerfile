@@ -1,12 +1,19 @@
-# Dockerfile for React frontend
-
+# Set the base image
 FROM node:18
 
-# For frontend Dockerfile
+# Set the working directory
 WORKDIR /app
-COPY frontend/package*.json ./
+
+# Copy package.json and install dependencies
+COPY package*.json ./
 RUN npm install
-COPY frontend/public ./public
-COPY . .
+
+# Copy only necessary files
+COPY public ./public
+COPY src ./src
+
+# Expose the React app port
 EXPOSE 3000
+
+# Start the application
 CMD ["npm", "start"]
