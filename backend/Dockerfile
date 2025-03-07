@@ -1,13 +1,17 @@
-FROM node:16-alpine
-# WORKDIR /app
-# COPY package*.json ./
-# RUN npm install
-# COPY . .
-# EXPOSE 5000
-# CMD ["node", "server.js"]
+FROM node:18
+
+# Set the working directory inside the container
 WORKDIR /app
-COPY backend/package*.json ./
+
+# Copy package.json and install dependencies
+COPY package*.json ./
 RUN npm install
-COPY backend/. .
+
+# Copy the entire backend directory (excluding files from .dockerignore)
+COPY . .
+
+# Expose the application port
 EXPOSE 5000
+
+# Start the server
 CMD ["npm", "start"]
