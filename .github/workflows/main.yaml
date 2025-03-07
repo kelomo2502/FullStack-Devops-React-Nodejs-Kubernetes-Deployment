@@ -3,7 +3,7 @@ name: Fullstack CI/CD Pipeline
 on:
   push:
     branches:
-      - main
+      - feature
   pull_request:
     branches:
       - main
