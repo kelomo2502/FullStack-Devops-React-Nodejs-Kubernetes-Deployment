@@ -13,28 +13,131 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    # Steps 1-7 remain unchanged (checkout, docker setup, etc)
+    # Step 1: Checkout code
+    - name: Checkout code
+      uses: actions/checkout@v2
 
-    # Step 8: Deploy to Kubernetes (FIXED)
-    - name: Deploy to Kubernetes
+    # Step 2: Set up Docker Buildx
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    # Step 3: Log in to Docker Hub
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    # Step 4: Build and push Backend Docker image
+    - name: Build and push Backend Docker image
       run: |
-        # Create directory on EC2
+        docker build -t kelomo2502/backend:latest -f backend/Dockerfile ./backend
+        docker push kelomo2502/backend:latest
+
+    # Step 5: Build and push Frontend Docker image
+    - name: Build and push Frontend Docker image
+      run: |
+        docker build -t kelomo2502/frontend:latest -f frontend/Dockerfile ./frontend
+        docker push kelomo2502/frontend:latest
+
+    # Step 6: Configure SSH for EC2
+    - name: Configure SSH for EC2
+      run: |
+        echo "${{ secrets.SSH_KEY }}" > ec2_key.pem
+        chmod 600 ec2_key.pem
+
+    # Step 7: SSH into EC2 and Set Up Minikube (FIXED)
+    - name: SSH and Setup Minikube
+      run: |
+        ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+        set -ex
+
+        # Clean up any existing yum locks
+        sudo rm -f /var/run/yum.pid
+
+        # System updates with yum lock check
+        while sudo yum check-update; [ $? -eq 100 ]; do
+          echo "YUM available, proceeding..."
+          break
+        done
+        sudo yum update -y
+
+        # Install Docker
+        sudo yum install -y docker
+        sudo systemctl start docker
+        sudo systemctl enable docker
+
+        # Add user to docker group
+        sudo usermod -aG docker $USER
+        newgrp docker  # Refresh group membership
+
+        # Install critical dependencies
+        sudo yum install -y conntrack-tools socat
+
+        # Install Minikube
+        curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+        sudo install minikube-linux-amd64 /usr/local/bin/minikube
+        sudo chmod +x /usr/local/bin/minikube
+        rm minikube-linux-amd64
+
+        # Verify Minikube installation
+        /usr/local/bin/minikube version
+
+        # Install kubectl
+        curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        sudo install kubectl /usr/local/bin/kubectl
+        sudo chmod +x /usr/local/bin/kubectl
+        rm kubectl
+
+        # Clean previous installations
+        sudo /usr/local/bin/minikube delete --all --purge
+        sudo rm -rf ~/.minikube ~/.kube
+
+        # Start Minikube with Docker driver
+        sudo -E /usr/local/bin/minikube start --driver=docker \
+          --force \
+          --extra-config=kubelet.cgroup-driver=systemd
+
+        # Configure kubeconfig
+        mkdir -p $HOME/.kube
+        sudo cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
+        sudo chown -R $(id -u):$(id -g) $HOME/.kube
+
+        # Verify installation
+        kubectl cluster-info
+        kubectl get nodes
+        sudo systemctl status docker
+        EOF
+
+    # Step 8: Copy Kubernetes Manifests to EC2
+    - name: Copy Kubernetes Manifests to EC2
+      run: |
+        # Create Kubernetes directory on EC2
         ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} \
           "mkdir -p /home/ec2-user/kubernetes"
 
-        # Copy Kubernetes manifests
+        # Copy manifest files to EC2
         scp -o StrictHostKeyChecking=no -i ec2_key.pem \
           ./kubernetes/*.yaml \
           ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }}:/home/ec2-user/kubernetes/
 
-        # Apply manifests
+    # Step 9: Deploy to Kubernetes (FIXED PATHS)
+    - name: Deploy to Kubernetes
+      run: |
         ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
         set -ex
-        
-        # Verify cluster is ready
-        kubectl cluster-info
-        
-        # Apply all manifests
+
+        # Verify Kubernetes manifest files exist
+        if [ ! -f /home/ec2-user/kubernetes/mongo-statefulset.yaml ] || \
+           [ ! -f /home/ec2-user/kubernetes/mongo-service.yaml ] || \
+           [ ! -f /home/ec2-user/kubernetes/backend.yaml ] || \
+           [ ! -f /home/ec2-user/kubernetes/frontend.yaml ]; then
+          echo "Error: Kubernetes manifest files missing!"
+          ls -la /home/ec2-user/kubernetes/
+          exit 1
+        fi
+
+        # Apply Kubernetes manifests
         kubectl apply -f /home/ec2-user/kubernetes/
         
         # Verify deployments
@@ -42,4 +145,6 @@ jobs:
         kubectl rollout status deployment/frontend
         EOF
 
-    # Step 9: Cleanup remains unchanged
+    # Step 10: Cleanup SSH Key
+    - name: Cleanup SSH Key
+      run: rm ec2_key.pem
