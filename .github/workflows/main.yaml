@@ -90,7 +90,7 @@ jobs:
 
         cd FullStack-Devops-React-Nodejs-Kubernetes-Deployment/
 
-        cd Kubernetes
+        cd kubernetes
 
         kubectl apply -f mongo-statefulset.yaml
         kubectl apply -f mongo-service.yaml
