@@ -67,17 +67,17 @@ jobs:
         sudo systemctl start docker
         sudo systemctl enable docker
 
-        # Install critical dependencies
-        sudo yum install -y conntrack-tools socat cri-tools
+        # Add user to docker group
+        sudo usermod -aG docker $USER
+        newgrp docker  # Refresh group membership
 
-        # Install crictl explicitly
-        CRICTL_VERSION=$(curl -s https://api.github.com/repos/kubernetes-sigs/cri-tools/releases/latest | grep tag_name | cut -d '"' -f 4)
-        curl -L https://github.com/kubernetes-sigs/cri-tools/releases/download/${CRICTL_VERSION}/crictl-${CRICTL_VERSION}-linux-amd64.tar.gz | sudo tar -xz -C /usr/local/bin
+        # Install critical dependencies
+        sudo yum install -y conntrack-tools socat
 
         # Install Minikube
         curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
         sudo install minikube-linux-amd64 /usr/local/bin/minikube
-        sudo chmod +x /usr/local/bin/minikube  # Ensure executable permissions
+        sudo chmod +x /usr/local/bin/minikube
         rm minikube-linux-amd64
 
         # Verify Minikube installation
@@ -93,11 +93,10 @@ jobs:
         sudo /usr/local/bin/minikube delete --all --purge
         sudo rm -rf ~/.minikube ~/.kube
 
-        # Start Minikube with required tools
-        sudo -E /usr/local/bin/minikube start --driver=none \
+        # Start Minikube with Docker driver
+        sudo -E /usr/local/bin/minikube start --driver=docker \
           --force \
-          --extra-config=kubelet.cgroup-driver=systemd \
-          --container-runtime=containerd
+          --extra-config=kubelet.cgroup-driver=systemd
 
         # Configure kubeconfig
         mkdir -p $HOME/.kube
@@ -107,8 +106,7 @@ jobs:
         # Verify installation
         kubectl cluster-info
         kubectl get nodes
-        sudo systemctl status containerd
-        which crictl
+        sudo systemctl status docker
         EOF
 
     # Step 8: Deploy to Kubernetes (FIXED PATHS)
