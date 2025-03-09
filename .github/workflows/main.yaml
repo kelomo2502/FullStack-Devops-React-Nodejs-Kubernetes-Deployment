@@ -77,20 +77,24 @@ jobs:
         # Install Minikube
         curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
         sudo install minikube-linux-amd64 /usr/local/bin/minikube
+        sudo chmod +x /usr/local/bin/minikube  # Ensure executable permissions
         rm minikube-linux-amd64
 
-        # Install kubectl with proper permissions
+        # Verify Minikube installation
+        /usr/local/bin/minikube version
+
+        # Install kubectl
         curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
         sudo install kubectl /usr/local/bin/kubectl
-        sudo chmod +x /usr/local/bin/kubectl  # Fix: Use sudo for chmod
+        sudo chmod +x /usr/local/bin/kubectl
         rm kubectl
 
         # Clean previous installations
-        sudo minikube delete --all --purge
+        sudo /usr/local/bin/minikube delete --all --purge
         sudo rm -rf ~/.minikube ~/.kube
 
         # Start Minikube with required tools
-        sudo -E minikube start --driver=none \
+        sudo -E /usr/local/bin/minikube start --driver=none \
           --force \
           --extra-config=kubelet.cgroup-driver=systemd \
           --container-runtime=containerd
