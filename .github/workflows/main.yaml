@@ -48,41 +48,41 @@ jobs:
 
     # Step 7: Deploy to EC2 and set up Minikube
     - name: SSH into EC2 and Set Up Minikube
-  run: |
-    ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
-    
-    # Update system packages
-    sudo apt-get update
+      run: |
+        ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+        
+        # Update system packages
+        sudo apt-get update
 
-    # Install Docker
-    sudo apt-get install -y docker.io
+        # Install Docker
+        sudo apt-get install -y docker.io
 
-    # Install Minikube
-    curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-    sudo mv minikube-linux-amd64 /usr/local/bin/minikube
-    sudo chmod +x /usr/local/bin/minikube
-    minikube version
+        # Install Minikube
+        curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+        sudo mv minikube-linux-amd64 /usr/local/bin/minikube
+        sudo chmod +x /usr/local/bin/minikube
+        minikube version
 
-    # Install kubectl
-    curl -LO "https://dl.k8s.io/release/v1.24.0/bin/linux/amd64/kubectl"
-    sudo mv kubectl /usr/local/bin/kubectl
-    sudo chmod +x /usr/local/bin/kubectl
-    kubectl version --client
+        # Install kubectl
+        curl -LO "https://dl.k8s.io/release/v1.24.0/bin/linux/amd64/kubectl"
+        sudo mv kubectl /usr/local/bin/kubectl
+        sudo chmod +x /usr/local/bin/kubectl
+        kubectl version --client
 
-    # Start Minikube with the none driver
-    sudo minikube start --driver=none
+        # Start Minikube with the none driver
+        CPU_COUNT=$(nproc)
+        if [ "$CPU_COUNT" -lt 2 ]; then
+          echo "Error: Kubernetes requires at least 2 CPUs. Current: $CPU_COUNT"
+          exit 1
+        fi
 
-    # Ensure KUBECONFIG is properly set
-    mkdir -p $HOME/.kube
-    sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config
-    sudo chown -R $USER:$USER $HOME/.kube/config
-
-    # Verify Kubernetes works
-    kubectl cluster-info
-    kubectl get nodes
-
-    EOF
-
+        sudo minikube start --driver=none
+        mkdir -p $HOME/.kube
+        sudo cp -r /root/.minikube $HOME/.minikube
+        sudo cp /root/.kube/config $HOME/.kube/config
+        sudo chown -R $USER:$USER $HOME/.minikube $HOME/.kube
+        
+        EOF
 
     # Step 8: Deploy to Kubernetes
     - name: Deploy to Kubernetes
