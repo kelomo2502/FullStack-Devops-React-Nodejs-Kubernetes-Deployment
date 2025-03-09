@@ -67,89 +67,33 @@ jobs:
         done
 
         # Install Docker
-        sudo yum install -y docker
-        sudo systemctl start docker
-        sudo systemctl enable docker
+        sudo amazon-linux-extras install docker -y
+        sudo service docker start
+        sudo usermod -a -G docker ec2-user
 
-        # Add user to docker group
-        sudo usermod -aG docker $USER
-        newgrp docker  # Refresh group membership
-
-        # Install required dependencies
-        sudo yum install -y conntrack-tools socat
 
         # Install Minikube
-        curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-        sudo install minikube-linux-amd64 /usr/local/bin/minikube
-        sudo chmod +x /usr/local/bin/minikube
-        rm minikube-linux-amd64
-
-        # Install kubectl
-        curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-        sudo install kubectl /usr/local/bin/kubectl
-        sudo chmod +x /usr/local/bin/kubectl
-        rm kubectl
-
-        # Fix permissions issue
-        sudo sysctl fs.protected_regular=0
-
-        # Clean previous installations
-        sudo /usr/local/bin/minikube delete --all --purge
-        sudo rm -rf ~/.minikube ~/.kube
-
-        # Start Minikube with adjusted memory
-        sudo -E /usr/local/bin/minikube start --driver=docker --memory=1400mb --force
-
-        # Configure kubeconfig
-        mkdir -p $HOME/.kube
-        sudo cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
-        sudo chown -R $(id -u):$(id -g) $HOME/.kube
-
-        # Verify installation
-        kubectl cluster-info
-        kubectl get nodes
-        sudo systemctl status docker
-        EOF
+        curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-latest.x86_64.rpm
+        sudo rpm -Uvh minikube-latest.x86_64.rpm
+        sudo ln -s /usr/bin/minikube /usr/local/bin/minikube
+        minikube start
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
     # Step 8: Copy Kubernetes Manifests to EC2
     - name: Copy Kubernetes Manifests to EC2
       run: |
-        # Create Kubernetes directory on EC2
-        ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} \
-          "mkdir -p /home/ec2-user/kubernetes"
+        sudo yum install git -y
+        git clone -b feature https://github.com/kelomo2502 FullStack-Devops-React-Nodejs-Kubernetes-Deployment.git
 
-        # Copy manifest files to EC2
-        scp -o StrictHostKeyChecking=no -i ec2_key.pem \
-          ./kubernetes/*.yaml \
-          ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }}:/home/ec2-user/kubernetes/
+        cd FullStack-Devops-React-Nodejs-Kubernetes-Deployment/
 
-    # Step 9: Deploy to Kubernetes (FIXED PATHS)
-    - name: Deploy to Kubernetes
-      run: |
-        ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
-        set -ex
+        cd Kubernetes
 
-        # Ensure kubectl is using Minikube's context
-        kubectl config use-context minikube
+        kubectl apply -f mongo-statefulset.yaml
+        kubectl apply -f mongo-service.yaml
+        kubectl apply -f backend.yaml
+        kubectl apply -f frontend.yaml
 
-        # Verify Kubernetes manifest files exist
-        if [ ! -f /home/ec2-user/kubernetes/mongo-statefulset.yaml ] || \
-           [ ! -f /home/ec2-user/kubernetes/mongo-service.yaml ] || \
-           [ ! -f /home/ec2-user/kubernetes/backend.yaml ] || \
-           [ ! -f /home/ec2-user/kubernetes/frontend.yaml ]; then
-          echo "Error: Kubernetes manifest files missing!"
-          ls -la /home/ec2-user/kubernetes/
-          exit 1
-        fi
 
-        # Apply Kubernetes manifests
-        kubectl apply --validate=false -f /home/ec2-user/kubernetes/
-
-        # Verify deployments
-        kubectl rollout status deployment/backend
-        kubectl rollout status deployment/frontend
-        EOF
-
-    # Step 10: Cleanup SSH Key
-    - name: Cleanup SSH Key
-      run: rm ec2_key.pem
+    
