@@ -99,7 +99,7 @@ jobs:
 
             # Clone the repository (ensure the branch and URL are correct)
             git clone -b feature https://github.com/kelomo2502/FullStack-Devops-React-Nodejs-Kubernetes-Deployment.git
-            cd FullStack-Devops-React-Nodejs-Kubernetes-Deployment/Kubernetes
+            cd FullStack-Devops-React-Nodejs-Kubernetes-Deployment/kubernetes
 
             # Apply Kubernetes manifests (skip client-side validation)
             kubectl apply -f mongo-statefulset.yaml --validate=false
