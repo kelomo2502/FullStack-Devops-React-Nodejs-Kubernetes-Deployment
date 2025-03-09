@@ -51,10 +51,7 @@ jobs:
       run: |
         ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
 
-        # Update system packages
         sudo yum update -y
-
-        # Install Docker
         sudo yum install -y docker
         sudo systemctl start docker
         sudo systemctl enable docker
@@ -65,7 +62,7 @@ jobs:
         rm minikube-linux-amd64  # Clean up
 
         # Verify Minikube installation
-        minikube version
+        /usr/local/bin/minikube version
 
         # Install kubectl (Latest Version)
         curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
@@ -79,12 +76,12 @@ jobs:
           exit 1
         fi
 
-        sudo minikube start --driver=none --force
+        sudo /usr/local/bin/minikube start --driver=none --force
 
         # Set up kubeconfig
         mkdir -p $HOME/.kube
         sudo cp -r /root/.minikube $HOME/.minikube
-        sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config
+        sudo cp /root/.kube/config $HOME/.kube/config
         sudo chown -R $USER:$USER $HOME/.minikube $HOME/.kube
 
         # Verify Kubernetes is running
