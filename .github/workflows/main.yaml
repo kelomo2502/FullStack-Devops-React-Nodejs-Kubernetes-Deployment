@@ -21,20 +21,20 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
 
-    # Step 3: Log in to Docker Hub (ensure you have stored your Docker Hub credentials in GitHub secrets)
+    # Step 3: Log in to Docker Hub
     - name: Log in to Docker Hub
       uses: docker/login-action@v2
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
-    # Step 4: Build and push the backend Docker image
+    # Step 4: Build and push Backend Docker image
     - name: Build and push Backend Docker image
       run: |
         docker build -t kelomo2502/backend:latest -f backend/Dockerfile ./backend
         docker push kelomo2502/backend:latest
 
-    # Step 5: Build and push the frontend Docker image
+    # Step 5: Build and push Frontend Docker image
     - name: Build and push Frontend Docker image
       run: |
         docker build -t kelomo2502/frontend:latest -f frontend/Dockerfile ./frontend
@@ -46,11 +46,11 @@ jobs:
         echo "${{ secrets.SSH_KEY }}" > ec2_key.pem
         chmod 600 ec2_key.pem
 
-    # Step 7: Deploy to EC2 and set up Minikube
+    # Step 7: SSH into EC2 and Set Up Minikube (Amazon Linux)
     - name: SSH into EC2 and Set Up Minikube
       run: |
         ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
-        
+
         # Update system packages
         sudo yum update -y
 
@@ -62,28 +62,35 @@ jobs:
         # Install Minikube
         curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
         sudo install minikube-linux-amd64 /usr/local/bin/minikube
-        rm minikube-linux-amd64
+        rm minikube-linux-amd64  # Clean up
+
+        # Verify Minikube installation
         minikube version
 
-        # Install kubectl
-        curl -LO "https://dl.k8s.io/release/v1.24.0/bin/linux/amd64/kubectl"
-        sudo mv kubectl /usr/local/bin/kubectl
-        sudo chmod +x /usr/local/bin/kubectl
-        kubectl version --client
+        # Install kubectl (Latest Version)
+        curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        sudo install kubectl /usr/local/bin/kubectl
+        rm kubectl  # Clean up
 
-        # Start Minikube with the none driver
+        # Start Minikube properly (Amazon Linux)
         CPU_COUNT=$(nproc)
         if [ "$CPU_COUNT" -lt 2 ]; then
           echo "Error: Kubernetes requires at least 2 CPUs. Current: $CPU_COUNT"
           exit 1
         fi
 
-        sudo minikube start --driver=none
+        sudo minikube start --driver=none --force
+
+        # Set up kubeconfig
         mkdir -p $HOME/.kube
         sudo cp -r /root/.minikube $HOME/.minikube
-        sudo cp /root/.kube/config $HOME/.kube/config
+        sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config
         sudo chown -R $USER:$USER $HOME/.minikube $HOME/.kube
-        
+
+        # Verify Kubernetes is running
+        kubectl cluster-info
+        kubectl get nodes
+
         EOF
 
     # Step 8: Deploy to Kubernetes
