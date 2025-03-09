@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    # Step 1: Checkout the code
+    # Step 1: Checkout code
     - name: Checkout code
       uses: actions/checkout@v2
 
@@ -21,90 +21,85 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
 
-    # Step 3: Log in to Docker Hub
+    # Step 3: Docker Hub login
     - name: Log in to Docker Hub
       uses: docker/login-action@v2
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
-    # Step 4: Build and push Backend Docker image
-    - name: Build and push Backend Docker image
+    # Step 4: Build and push Backend
+    - name: Build and push Backend
       run: |
         docker build -t kelomo2502/backend:latest -f backend/Dockerfile ./backend
         docker push kelomo2502/backend:latest
 
-    # Step 5: Build and push Frontend Docker image
-    - name: Build and push Frontend Docker image
+    # Step 5: Build and push Frontend
+    - name: Build and push Frontend
       run: |
         docker build -t kelomo2502/frontend:latest -f frontend/Dockerfile ./frontend
         docker push kelomo2502/frontend:latest
 
-    # Step 6: Configure SSH for EC2
+    # Step 6: Configure SSH
     - name: Configure SSH for EC2
       run: |
         echo "${{ secrets.SSH_KEY }}" > ec2_key.pem
         chmod 600 ec2_key.pem
 
-    # Step 7: SSH into EC2 and Set Up Minikube (Amazon Linux)
-    - name: SSH into EC2 and Set Up Minikube
+    # Step 7: Setup Minikube (Amazon Linux)
+    - name: SSH and Setup Minikube
       run: |
         ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+        set -e
 
+        # System updates
         sudo yum update -y
+
+        # Install Docker
         sudo yum install -y docker
         sudo systemctl start docker
         sudo systemctl enable docker
 
+        # Install dependencies
+        sudo yum install -y conntrack socat
+
         # Install Minikube
         curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
         sudo install minikube-linux-amd64 /usr/local/bin/minikube
-        rm minikube-linux-amd64  # Clean up
+        rm minikube-linux-amd64
 
-        # Verify Minikube installation
-        /usr/local/bin/minikube version
-
-        # Install kubectl (Latest Version)
+        # Install kubectl
         curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
         sudo install kubectl /usr/local/bin/kubectl
-        rm kubectl  # Clean up
+        rm kubectl
 
-        # Start Minikube properly (Amazon Linux)
-        CPU_COUNT=$(nproc)
-        if [ "$CPU_COUNT" -lt 2 ]; then
-          echo "Error: Kubernetes requires at least 2 CPUs. Current: $CPU_COUNT"
-          exit 1
-        fi
-
+        # Start Minikube
+        sudo /usr/local/bin/minikube delete || true
         sudo /usr/local/bin/minikube start --driver=none --force
 
-        # Set up kubeconfig
+        # Configure kubeconfig
         mkdir -p $HOME/.kube
-        sudo cp -r /root/.minikube $HOME/.minikube
-        sudo cp /root/.kube/config $HOME/.kube/config
-        sudo chown -R $USER:$USER $HOME/.minikube $HOME/.kube
+        sudo cp -f /root/.kube/config $HOME/.kube/
+        sudo chown -R $(id -u):$(id -g) $HOME/.kube
 
-        # Verify Kubernetes is running
+        # Verify cluster
         kubectl cluster-info
         kubectl get nodes
-
         EOF
 
-    # Step 8: Deploy to Kubernetes
+    # Step 8: Deploy to Kubernetes (Properly formatted)
     - name: Deploy to Kubernetes
       run: |
         ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+        kubectl apply -f /home/ec2-user/kubernetes/mongo-statefulset.yaml
+        kubectl apply -f /home/ec2-user/kubernetes/mongo-service.yaml
+        kubectl apply -f /home/ec2-user/kubernetes/backend.yaml
+        kubectl apply -f /home/ec2-user/kubernetes/frontend.yaml
         
-        kubectl apply -f /home/ubuntu/kubernetes/mongo-statefulset.yaml
-        kubectl apply -f /home/ubuntu/kubernetes/mongo-service.yaml
-        kubectl apply -f /home/ubuntu/kubernetes/backend.yaml
-        kubectl apply -f /home/ubuntu/kubernetes/frontend.yaml
-
         kubectl rollout status deployment/backend
         kubectl rollout status deployment/frontend
-
         EOF
 
-    # Step 9: Cleanup SSH Key
+    # Step 9: Cleanup
     - name: Cleanup SSH Key
       run: rm ec2_key.pem
