@@ -84,7 +84,8 @@ jobs:
     # Step 8: Copy Kubernetes Manifests to EC2
     - name: Copy Kubernetes Manifests to EC2
       run: |
-        sudo yum install git -y
+        sudo apt-get update && sudo apt-get install -y git
+
         git clone -b feature https://github.com/kelomo2502 FullStack-Devops-React-Nodejs-Kubernetes-Deployment.git
 
         cd FullStack-Devops-React-Nodejs-Kubernetes-Deployment/
