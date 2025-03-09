@@ -55,12 +55,16 @@ jobs:
         # Clean up any existing yum locks
         sudo rm -f /var/run/yum.pid
 
-        # System updates with yum lock check
-        while sudo yum check-update; [ $? -eq 100 ]; do
-          echo "YUM available, proceeding..."
-          break
+        # Retry mechanism for YUM updates
+        for i in {1..5}; do
+          if sudo yum clean all && sudo yum update -y; then
+            echo "YUM update succeeded on attempt $i"
+            break
+          else
+            echo "YUM update failed on attempt $i, retrying..."
+            sleep 5
+          fi
         done
-        sudo yum update -y
 
         # Install Docker
         sudo yum install -y docker
