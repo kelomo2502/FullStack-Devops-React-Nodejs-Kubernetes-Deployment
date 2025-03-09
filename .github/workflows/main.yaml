@@ -12,90 +12,97 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    # Step 1: Checkout code
-    - name: Checkout code
-      uses: actions/checkout@v2
+      # Step 2: Set up Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
-    # Step 2: Set up Docker Buildx
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      # Step 3: Log in to Docker Hub
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-    # Step 3: Log in to Docker Hub
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v2
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+      # Step 4: Build and push Backend Docker image
+      - name: Build and push Backend Docker image
+        run: |
+          docker build -t kelomo2502/backend:latest -f backend/Dockerfile ./backend
+          docker push kelomo2502/backend:latest
 
-    # Step 4: Build and push Backend Docker image
-    - name: Build and push Backend Docker image
-      run: |
-        docker build -t kelomo2502/backend:latest -f backend/Dockerfile ./backend
-        docker push kelomo2502/backend:latest
+      # Step 5: Build and push Frontend Docker image
+      - name: Build and push Frontend Docker image
+        run: |
+          docker build -t kelomo2502/frontend:latest -f frontend/Dockerfile ./frontend
+          docker push kelomo2502/frontend:latest
 
-    # Step 5: Build and push Frontend Docker image
-    - name: Build and push Frontend Docker image
-      run: |
-        docker build -t kelomo2502/frontend:latest -f frontend/Dockerfile ./frontend
-        docker push kelomo2502/frontend:latest
+      # Step 6: Configure SSH for EC2
+      - name: Configure SSH for EC2
+        run: |
+          echo "${{ secrets.SSH_KEY }}" > ec2_key.pem
+          chmod 600 ec2_key.pem
 
-    # Step 6: Configure SSH for EC2
-    - name: Configure SSH for EC2
-      run: |
-        echo "${{ secrets.SSH_KEY }}" > ec2_key.pem
-        chmod 600 ec2_key.pem
+      # Step 7: SSH into EC2 and Setup Minikube (with waiting loop)
+      - name: SSH and Setup Minikube
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+            set -ex
 
-    # Step 7: SSH into EC2 and Set Up Minikube (FIXED)
-    - name: SSH and Setup Minikube
-      run: |
-        ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
-        set -ex
+            # Clean up any existing YUM locks
+            sudo rm -f /var/run/yum.pid
 
-        # Clean up any existing YUM locks
-        sudo rm -f /var/run/yum.pid
+            # Retry mechanism for YUM updates
+            for i in {1..5}; do
+              if sudo yum clean all && sudo yum update -y; then
+                echo "YUM update succeeded on attempt $i"
+                break
+              else
+                echo "YUM update failed on attempt $i, retrying..."
+                sleep 5
+              fi
+            done
 
-        # Retry mechanism for YUM updates
-        for i in {1..5}; do
-          if sudo yum clean all && sudo yum update -y; then
-            echo "YUM update succeeded on attempt $i"
-            break
-          else
-            echo "YUM update failed on attempt $i, retrying..."
-            sleep 5
-          fi
-        done
+            # Install Docker
+            sudo amazon-linux-extras install docker -y
+            sudo service docker start
+            sudo usermod -a -G docker ec2-user
 
-        # Install Docker
-        sudo amazon-linux-extras install docker -y
-        sudo service docker start
-        sudo usermod -a -G docker ec2-user
+            # Install Minikube
+            curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-latest.x86_64.rpm
+            sudo rpm -Uvh minikube-latest.x86_64.rpm
+            sudo ln -sf /usr/bin/minikube /usr/local/bin/minikube
+            minikube start
 
+            # Install kubectl
+            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
-        # Install Minikube
-        curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-latest.x86_64.rpm
-        sudo rpm -Uvh --force minikube-latest.x86_64.rpm
+            # Wait for the Kubernetes API server to be ready
+            until kubectl version --short; do
+              echo "Waiting for Kubernetes cluster to be ready..."
+              sleep 5
+            done
+          EOF
 
-        sudo ln -sf /usr/bin/minikube /usr/local/bin/minikube
-        minikube start
-        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-        sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+      # Step 8: SSH into EC2 and Deploy Kubernetes Manifests
+      - name: SSH and Deploy Kubernetes Manifests
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+            set -ex
 
-    # Step 8: Copy Kubernetes Manifests to EC2
-    - name: Copy Kubernetes Manifests to EC2
-      run: |
-        sudo apt-get update && sudo apt-get install -y git
+            # Install Git on EC2
+            sudo yum install git -y
 
-        git clone -b feature https://github.com/kelomo2502/FullStack-Devops-React-Nodejs-Kubernetes-Deployment.git
+            # Clone the repository (ensure the branch and URL are correct)
+            git clone -b feature https://github.com/kelomo2502/FullStack-Devops-React-Nodejs-Kubernetes-Deployment.git
+            cd FullStack-Devops-React-Nodejs-Kubernetes-Deployment/Kubernetes
 
-        cd FullStack-Devops-React-Nodejs-Kubernetes-Deployment/
-
-        cd kubernetes
-
-        kubectl apply -f mongo-statefulset.yaml
-        kubectl apply -f mongo-service.yaml
-        kubectl apply -f backend.yaml
-        kubectl apply -f frontend.yaml
-
-
-    
+            # Apply Kubernetes manifests (skip client-side validation)
+            kubectl apply -f mongo-statefulset.yaml --validate=false
+            kubectl apply -f mongo-service.yaml --validate=false
+            kubectl apply -f backend.yaml --validate=false
+            kubectl apply -f frontend.yaml --validate=false
+          EOF
