@@ -30,7 +30,7 @@ export default function App() {
         placeholder="Enter a task"
       />
       <button onClick={addTodo}>Add</button>
-      <ul>
+      <ul style={{backgroundColor:"blue"}}>
         {todos.map((todo) => (
           <li key={todo._id}>{todo.task}</li>
         ))}
