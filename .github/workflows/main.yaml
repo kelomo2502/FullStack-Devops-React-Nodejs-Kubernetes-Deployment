@@ -72,7 +72,8 @@ jobs:
 
             # Install Minikube
             curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-latest.x86_64.rpm
-            sudo rpm -Uvh minikube-latest.x86_64.rpm
+            sudo rpm -Uvh --force minikube-latest.x86_64.rpm
+
             sudo ln -sf /usr/bin/minikube /usr/local/bin/minikube
             minikube start
 
