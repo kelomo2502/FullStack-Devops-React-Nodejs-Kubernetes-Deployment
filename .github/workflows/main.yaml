@@ -1,0 +1,79 @@
+name: Deploy to kubernetes on EC2
+
+on:
+  push:
+    branches:
+      - feature
+
+jobs:
+  build-and-push:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKER_HUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_HUB_USERNAME }}" --password-stdin
+
+      - name: Build and Push Backend Image
+        run: |
+          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/backend:latest ./backend
+          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/backend:latest
+
+      - name: Build and Push Frontend Image
+        run: |
+          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/frontend:latest ./frontend
+          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/frontend:latest
+
+  deploy:
+    name: Deploy to kubernetes on EC2
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Create directory on EC2 first
+      - name: Create kubernetes Directory on EC2
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_SSH_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            mkdir -p /home/${{ secrets.EC2_SSH_USER }}/kubernetes
+
+      # Copy entire kubernetes directory
+      - name: Copy kubernetes Manifests to EC2
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_SSH_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "kubernetes/"
+          target: "/home/${{ secrets.EC2_SSH_USER }}/"
+
+      # Deployment script
+      - name: Deploy to kubernetes
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_SSH_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            export KUBECONFIG=/etc/kubernetes/admin.conf
+            cd /home/${{ secrets.EC2_SSH_USER }}/kubernetes
+            
+            # Verify files exist
+            echo "Contents of kubernetes directory:"
+            ls -la
+            
+            # Update image placeholders
+            sed -i "s|IMAGE_BACKEND|${{ secrets.DOCKER_HUB_USERNAME }}/backend:latest|g" backend.yaml
+            sed -i "s|IMAGE_FRONTEND|${{ secrets.DOCKER_HUB_USERNAME }}/frontend:latest|g" frontend.yaml
+            
+            # Apply all manifests
+            kubectl apply -f .

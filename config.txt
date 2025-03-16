@@ -1,3 +1,5 @@
 minikube kubectl -- config view
 
 this si to view the config
+
+This runner will have the following labels: 'self-hosted', 'Windows', 'X64'
